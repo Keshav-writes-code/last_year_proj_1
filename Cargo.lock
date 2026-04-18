@@ -125,6 +125,7 @@ dependencies = [
  "mdns-sd",
  "prost",
  "serde",
+ "serde_json",
  "tokio",
  "tonic",
  "tracing",
@@ -136,7 +137,9 @@ dependencies = [
 name = "aegis-core"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "prost",
+ "serde",
  "tonic",
  "tonic-build",
 ]
@@ -147,6 +150,7 @@ version = "0.1.0"
 dependencies = [
  "aegis-core",
  "anyhow",
+ "bincode",
  "mdns-sd",
  "prost",
  "tokio",

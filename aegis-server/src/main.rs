@@ -1,10 +1,11 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex};
 use tonic::{transport::Server, Request, Response, Status};
-use tracing::info;
+use tracing::{info, error};
 
 use aegis_core::pb::federated_learning_server::{FederatedLearning, FederatedLearningServer};
 use aegis_core::pb::{GetGlobalModelRequest, GetGlobalModelResponse, SubmitWeightsRequest, SubmitWeightsResponse};
+use aegis_core::model::LanguageModel;
 use mdns_sd::{ServiceDaemon, ServiceInfo};
 
 /// The Secure Aggregator state.
@@ -12,8 +13,7 @@ use mdns_sd::{ServiceDaemon, ServiceInfo};
 #[derive(Debug, Default)]
 struct AggregatorState {
     global_model_version: u64,
-    global_weights: Vec<u8>,
-    // In a real application, you'd buffer incoming updates and securely aggregate them.
+    global_model: LanguageModel,
     update_count: u64,
 }
 
@@ -24,11 +24,10 @@ pub struct AegisAggregator {
 
 impl AegisAggregator {
     pub fn new() -> Self {
-        // Initialize with a dummy model version 1 and empty weights.
         Self {
             state: Arc::new(Mutex::new(AggregatorState {
                 global_model_version: 1,
-                global_weights: b"initial_global_weights".to_vec(),
+                global_model: LanguageModel::new(),
                 update_count: 0,
             })),
         }
@@ -47,21 +46,32 @@ impl FederatedLearning for AegisAggregator {
             req.client_id, req.model_version, req.data_points_count
         );
 
-        let mut state = self.state.lock().unwrap();
-        // Here we would perform secure aggregation of `req.weights` into `state.global_weights`.
-        // For demonstration, we simply log and increment an update counter.
-        state.update_count += 1;
-        info!("Total updates received: {}", state.update_count);
+        // Deserialize incoming language model
+        let local_model: LanguageModel = match bincode::deserialize(&req.weights) {
+            Ok(m) => m,
+            Err(e) => {
+                error!("Failed to deserialize weights from {}: {}", req.client_id, e);
+                return Ok(Response::new(SubmitWeightsResponse {
+                    success: false,
+                    message: "Failed to deserialize payload.".to_string(),
+                }));
+            }
+        };
 
-        // Periodically we might bump the global model version.
-        if state.update_count % 10 == 0 {
-            state.global_model_version += 1;
-            info!("Global model updated to version: {}", state.global_model_version);
-        }
+        let mut state = self.state.lock().unwrap();
+        // Secure aggregation: merge the incoming frequencies into the global model
+        state.global_model.merge(&local_model);
+
+        state.update_count += 1;
+        info!("Total updates received: {}. Global data points: {}", state.update_count, state.global_model.data_points);
+
+        // Bump the global model version for every update to propagate changes immediately
+        state.global_model_version += 1;
+        info!("Global model updated to version: {}", state.global_model_version);
 
         let reply = SubmitWeightsResponse {
             success: true,
-            message: "Weights aggregated securely.".to_string(),
+            message: "Weights aggregated successfully.".to_string(),
         };
 
         Ok(Response::new(reply))
@@ -76,9 +86,17 @@ impl FederatedLearning for AegisAggregator {
 
         let state = self.state.lock().unwrap();
 
+        let serialized_model = match bincode::serialize(&state.global_model) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                error!("Failed to serialize global model: {}", e);
+                return Err(Status::internal("Failed to serialize global model."));
+            }
+        };
+
         let reply = GetGlobalModelResponse {
             model_version: state.global_model_version,
-            global_weights: state.global_weights.clone(),
+            global_weights: serialized_model,
         };
 
         Ok(Response::new(reply))
