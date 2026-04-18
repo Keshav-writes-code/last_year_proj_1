@@ -2,6 +2,8 @@ name: Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
 
@@ -11,15 +13,15 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-20.04, windows-2019, macos-12]
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-20.04
             artifact_name: aegis-linux
             archive_ext: tar.gz
-          - os: windows-latest
+          - os: windows-2019
             artifact_name: aegis-windows
             archive_ext: zip
-          - os: macos-latest
+          - os: macos-12
             artifact_name: aegis-macos
             archive_ext: tar.gz
 
