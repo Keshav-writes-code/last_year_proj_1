@@ -5,7 +5,7 @@ use tracing::{info, error};
 
 use aegis_core::pb::federated_learning_server::{FederatedLearning, FederatedLearningServer};
 use aegis_core::pb::{GetGlobalModelRequest, GetGlobalModelResponse, SubmitWeightsRequest, SubmitWeightsResponse};
-use aegis_core::model::LanguageModel;
+use aegis_core::model::ModelWeights;
 use mdns_sd::{ServiceDaemon, ServiceInfo};
 
 /// The Secure Aggregator state.
@@ -13,7 +13,7 @@ use mdns_sd::{ServiceDaemon, ServiceInfo};
 #[derive(Debug, Default)]
 struct AggregatorState {
     global_model_version: u64,
-    global_model: LanguageModel,
+    global_model: ModelWeights,
     update_count: u64,
 }
 
@@ -27,7 +27,7 @@ impl AegisAggregator {
         Self {
             state: Arc::new(Mutex::new(AggregatorState {
                 global_model_version: 1,
-                global_model: LanguageModel::new(),
+                global_model: ModelWeights::new(),
                 update_count: 0,
             })),
         }
@@ -46,8 +46,8 @@ impl FederatedLearning for AegisAggregator {
             req.client_id, req.model_version, req.data_points_count
         );
 
-        // Deserialize incoming language model
-        let local_model: LanguageModel = match bincode::deserialize(&req.weights) {
+        // Deserialize incoming tensor model
+        let local_model: ModelWeights = match bincode::deserialize(&req.weights) {
             Ok(m) => m,
             Err(e) => {
                 error!("Failed to deserialize weights from {}: {}", req.client_id, e);

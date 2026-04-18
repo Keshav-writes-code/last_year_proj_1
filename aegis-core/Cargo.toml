@@ -6,6 +6,8 @@ description = "Core gRPC definitions and common types for the Aegis federated le
 
 [dependencies]
 bincode = "1"
+candle-core = "0.10.2"
+candle-nn = "0.10.2"
 prost = "0.13.3"
 serde = { version = "1.0.228", features = ["derive"] }
 tonic = "0.12.3"
