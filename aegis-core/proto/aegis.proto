@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package aegis;
+
+// Represents the FederatedLearning service that an Edge Node interacts with
+service FederatedLearning {
+    // Edge nodes submit their local model updates (e.g., gradients/weights)
+    rpc SubmitWeights (SubmitWeightsRequest) returns (SubmitWeightsResponse);
+
+    // Edge nodes pull the current global model from the Secure Aggregator
+    rpc GetGlobalModel (GetGlobalModelRequest) returns (GetGlobalModelResponse);
+}
+
+// Request to submit local weights
+message SubmitWeightsRequest {
+    // Unique identifier for the client submitting the weights
+    string client_id = 1;
+    // The version of the global model the client trained on
+    uint64 model_version = 2;
+    // Encrypted or serialized weights updates
+    bytes weights = 3;
+    // Number of data points the local model was trained on, used for weighted averaging
+    uint64 data_points_count = 4;
+}
+
+// Response from the Secure Aggregator upon receiving weights
+message SubmitWeightsResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+// Request to get the current global model
+message GetGlobalModelRequest {
+    string client_id = 1;
+}
+
+// The response containing the global model
+message GetGlobalModelResponse {
+    uint64 model_version = 1;
+    bytes global_weights = 2;
+}

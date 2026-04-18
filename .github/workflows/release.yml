@@ -1,0 +1,89 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build release on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-20.04, windows-2019, macos-12]
+        include:
+          - os: ubuntu-20.04
+            artifact_name: aegis-linux
+            archive_ext: tar.gz
+          - os: windows-2019
+            artifact_name: aegis-windows
+            archive_ext: zip
+          - os: macos-12
+            artifact_name: aegis-macos
+            archive_ext: tar.gz
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install protobuf compiler
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Install protobuf compiler
+        if: runner.os == 'macOS'
+        run: brew install protobuf
+
+      - name: Install protobuf compiler
+        if: runner.os == 'Windows'
+        run: choco install protoc
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
+        run: cargo build --release --workspace
+
+      - name: Package artifacts (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p release_package
+          cp target/release/aegis-client target/release/aegis-server release_package/
+          tar -czvf ${{ matrix.artifact_name }}.${{ matrix.archive_ext }} -C release_package .
+
+      - name: Package artifacts (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          mkdir release_package
+          copy target\release\aegis-client.exe release_package\
+          copy target\release\aegis-server.exe release_package\
+          Compress-Archive -Path release_package\* -DestinationPath ${{ matrix.artifact_name }}.${{ matrix.archive_ext }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_name }}.${{ matrix.archive_ext }}
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display downloaded artifacts
+        run: ls -la artifacts/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
