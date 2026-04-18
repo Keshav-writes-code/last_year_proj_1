@@ -1,0 +1,10 @@
+[package]
+name = "native_gui"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+iced = { version = "0.12", features = ["tokio", "advanced"] }
+tokio = { version = "1.37", features = ["full"] }
+core_network = { path = "../core_network" }
+inference_engine = { path = "../inference_engine" }

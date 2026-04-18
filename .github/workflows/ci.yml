@@ -1,0 +1,64 @@
+name: SwarmNode CI/CD
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build and Package
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-2022]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Protoc (Ubuntu)
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler libwayland-dev pkg-config libxkbcommon-dev
+
+      - name: Build Release
+        run: cargo build --workspace --release
+
+      - name: Strip Binaries (Ubuntu)
+        if: matrix.os == 'ubuntu-22.04'
+        run: strip target/release/swarmnode
+
+      - name: Compress Binaries (Ubuntu)
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          tar -czvf swarmnode-linux.tar.gz -C target/release swarmnode
+          zip -j swarmnode-linux.zip target/release/swarmnode
+
+      - name: Compress Binaries (Windows)
+        if: matrix.os == 'windows-2022'
+        run: |
+          Compress-Archive -Path target\release\swarmnode.exe -DestinationPath swarmnode-windows.zip
+
+      - name: Upload Artifact (Ubuntu)
+        if: matrix.os == 'ubuntu-22.04'
+        uses: actions/upload-artifact@v4
+        with:
+          name: swarmnode-linux
+          path: |
+            swarmnode-linux.tar.gz
+            swarmnode-linux.zip
+
+      - name: Upload Artifact (Windows)
+        if: matrix.os == 'windows-2022'
+        uses: actions/upload-artifact@v4
+        with:
+          name: swarmnode-windows
+          path: swarmnode-windows.zip

@@ -1,0 +1,11 @@
+[package]
+name = "core_network"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1.37", features = ["full"] }
+libp2p = { version = "0.54.1", features = ["macros", "tokio", "mdns", "tcp", "noise", "yamux", "quic", "kad", "request-response", "json", "cbor"] }
+serde = { version = "1.0", features = ["derive"] }
+bincode = "1.3"
+inference_engine = { path = "../inference_engine" }
