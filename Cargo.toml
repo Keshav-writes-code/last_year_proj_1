@@ -1,7 +1,0 @@
-[workspace]
-members = [
-    "aegis-core",
-    "aegis-server",
-    "aegis-client"
-]
-resolver = "2"
