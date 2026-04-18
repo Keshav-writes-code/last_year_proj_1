@@ -1,0 +1,20 @@
+[workspace]
+members = [
+    "core_network",
+    "inference_engine",
+    "native_gui",
+]
+resolver = "2"
+
+[package]
+name = "swarmnode"
+version = "0.1.0"
+edition = "2024"
+description = "SwarmNode: Native Desktop P2P AI Inference Network"
+
+[dependencies]
+tokio = { version = "1.37", features = ["full"] }
+core_network = { path = "core_network" }
+inference_engine = { path = "inference_engine" }
+native_gui = { path = "native_gui" }
+iced = "0.12"
