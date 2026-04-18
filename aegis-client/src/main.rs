@@ -10,7 +10,8 @@ use serde::{Serialize, Deserialize};
 use aegis_core::pb::federated_learning_client::FederatedLearningClient;
 use aegis_core::pb::{GetGlobalModelRequest, SubmitWeightsRequest};
 use aegis_core::model::ModelWeights;
-use candle_core::{Device, Tensor, DType};
+use candle_core::{Device, Tensor, DType, Module};
+use candle_nn::{linear, VarMap, VarBuilder, Optimizer, SGD};
 use std::collections::HashMap;
 
 const NOTES_FILE: &str = "aegis_notes.json";
@@ -47,6 +48,7 @@ impl AppData {
 #[derive(Debug)]
 enum WorkerMessage {
     StatusUpdate(String),
+    TrainingProgress(u32, f32), // (epoch, loss)
     GlobalModelReceived(u64, ModelWeights),
     SyncComplete,
 }
@@ -65,6 +67,8 @@ struct AegisApp {
     global_model_version: u64,
     global_model: ModelWeights,
     is_syncing: bool,
+    training_epoch: Option<u32>,
+    training_loss: Option<f32>,
     client_id: String,
     ui_tx: mpsc::Sender<UiMessage>,
     worker_rx: mpsc::Receiver<WorkerMessage>,
@@ -79,6 +83,8 @@ impl AegisApp {
             global_model_version: 0,
             global_model: ModelWeights::new(),
             is_syncing: false,
+            training_epoch: None,
+            training_loss: None,
             client_id: Default::default(),
             ui_tx,
             worker_rx,
@@ -198,18 +204,65 @@ async fn run_background_worker(
                 let data_points = texts.iter().map(|t| t.len() as u64).sum::<u64>();
 
                 let device = Device::Cpu;
+
+                // Initialize model using VarMap
+                let varmap = VarMap::new();
+                let vb = VarBuilder::from_varmap(&varmap, DType::F32, &device);
+
+                // Dummy objective: predicting input length normalized from character count
+                // A real model would tokenize, embed, and predict
+                let linear_model = match linear(1, 1, vb.pp("linear")) {
+                    Ok(l) => l,
+                    Err(_) => {
+                        let _ = worker_tx.send(WorkerMessage::StatusUpdate("Failed to init candle model".to_string())).await;
+                        continue;
+                    }
+                };
+
+                let mut sgd = match SGD::new(varmap.all_vars(), 0.01) {
+                    Ok(opt) => opt,
+                    Err(_) => {
+                        let _ = worker_tx.send(WorkerMessage::StatusUpdate("Failed to init SGD optimizer".to_string())).await;
+                        continue;
+                    }
+                };
+
+                let mut current_loss = 0.0;
+                let epochs = 50;
+
+                for epoch in 1..=epochs {
+                    let mut epoch_loss = 0.0;
+                    for text in &texts {
+                        let feature = text.len() as f32 / 100.0; // Normalize
+                        let target = feature * 2.0 + 1.0; // Dummy true function
+
+                        let xs = Tensor::new(&[[feature]], &device).unwrap();
+                        let ys = Tensor::new(&[[target]], &device).unwrap();
+
+                        if let Ok(predictions) = linear_model.forward(&xs) {
+                            if let Ok(loss) = candle_nn::loss::mse(&predictions, &ys) {
+                                let _ = sgd.backward_step(&loss);
+                                epoch_loss += loss.to_vec0::<f32>().unwrap_or(0.0);
+                            }
+                        }
+                    }
+
+                    current_loss = epoch_loss / texts.len().max(1) as f32;
+                    let _ = worker_tx.send(WorkerMessage::TrainingProgress(epoch, current_loss)).await;
+                    tokio::time::sleep(Duration::from_millis(20)).await; // Add slight delay to make progress visible in UI
+                }
+
+                // Extract trained tensors back into a HashMap
                 let mut tensor_map = HashMap::new();
-
-                let weight = Tensor::randn(0f32, 1f32, (10, 10), &device).unwrap();
-                let bias = Tensor::zeros(10, DType::F32, &device).unwrap();
-
-                tensor_map.insert("linear.weight".to_string(), weight);
-                tensor_map.insert("linear.bias".to_string(), bias);
+                for (name, var) in varmap.data().lock().unwrap().iter() {
+                    tensor_map.insert(name.clone(), var.as_tensor().clone());
+                }
 
                 match ModelWeights::from_tensors(&tensor_map, data_points) {
                     Ok(weights_struct) => {
                         match bincode::serialize(&weights_struct) {
                             Ok(weights_payload) => {
+                                let _ = worker_tx.send(WorkerMessage::StatusUpdate("Pushing weights via gRPC...".to_string())).await;
                                 let submit_req = tonic::Request::new(SubmitWeightsRequest {
                                     client_id: client_id.clone(),
                                     model_version: current_model_version,
@@ -220,7 +273,7 @@ async fn run_background_worker(
                                 match client.submit_weights(submit_req).await {
                                     Ok(resp) => {
                                         if resp.into_inner().success {
-                                            let _ = worker_tx.send(WorkerMessage::StatusUpdate("Tensor sync complete.".to_string())).await;
+                                            let _ = worker_tx.send(WorkerMessage::StatusUpdate(format!("Tensor sync complete. Final Loss: {:.4}", current_loss))).await;
                                         }
                                     }
                                     Err(e) => {
@@ -251,6 +304,10 @@ impl eframe::App for AegisApp {
                 WorkerMessage::StatusUpdate(status) => {
                     self.status_text = status;
                 }
+                WorkerMessage::TrainingProgress(epoch, loss) => {
+                    self.training_epoch = Some(epoch);
+                    self.training_loss = Some(loss);
+                }
                 WorkerMessage::GlobalModelReceived(version, model) => {
                     self.global_model_version = version;
                     self.global_model = model;
@@ -258,6 +315,8 @@ impl eframe::App for AegisApp {
                 }
                 WorkerMessage::SyncComplete => {
                     self.is_syncing = false;
+                    self.training_epoch = None;
+                    self.training_loss = None;
                     self.status_text = "Sync Complete.".to_string();
                 }
             }
@@ -269,8 +328,13 @@ impl eframe::App for AegisApp {
                 ui.label(format!("Status: {}", self.status_text));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if self.is_syncing {
-                        ui.add(egui::Spinner::new());
-                        ui.label("Syncing...");
+                        if let (Some(epoch), Some(loss)) = (self.training_epoch, self.training_loss) {
+                            ui.label(format!("Epoch {}/50 (Loss: {:.4})", epoch, loss));
+                            ui.add(egui::ProgressBar::new(epoch as f32 / 50.0).desired_width(100.0));
+                        } else {
+                            ui.add(egui::Spinner::new());
+                            ui.label("Syncing...");
+                        }
                     } else {
                         if ui.button("Sync to Global Model").clicked() {
                             self.is_syncing = true;
