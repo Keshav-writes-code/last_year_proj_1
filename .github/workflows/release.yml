@@ -6,6 +6,7 @@ on:
       - main
     tags:
       - 'v*'
+  workflow_dispatch: 
 
 jobs:
   build:
@@ -13,11 +14,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        # 1. FIXED: Added macos-12 to the main array and aligned the OS versions
+        os: [ubuntu-22.04, windows-2022, macos-12]
         include:
-          - os: ubuntu-20.04
+          # 2. FIXED: OS names here now exactly match the os array above
+          - os: ubuntu-22.04
             artifact_name: aegis-linux
             archive_ext: tar.gz
-          - os: windows-2019
+          - os: windows-2022
             artifact_name: aegis-windows
             archive_ext: zip
           - os: macos-12
