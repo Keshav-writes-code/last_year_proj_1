@@ -46,3 +46,19 @@ jobs:
         if: matrix.os == 'windows-2022'
         run: |
           Compress-Archive -Path target\release\swarmnode.exe -DestinationPath swarmnode-windows.zip
+
+      - name: Upload Artifact (Ubuntu)
+        if: matrix.os == 'ubuntu-22.04'
+        uses: actions/upload-artifact@v4
+        with:
+          name: swarmnode-linux
+          path: |
+            swarmnode-linux.tar.gz
+            swarmnode-linux.zip
+
+      - name: Upload Artifact (Windows)
+        if: matrix.os == 'windows-2022'
+        uses: actions/upload-artifact@v4
+        with:
+          name: swarmnode-windows
+          path: swarmnode-windows.zip
