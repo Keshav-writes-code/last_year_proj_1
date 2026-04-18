@@ -14,10 +14,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-20.04
+          - os: ubuntu-22.04
             artifact_name: aegis-linux
             archive_ext: tar.gz
-          - os: windows-2019
+          - os: windows-2022
             artifact_name: aegis-windows
             archive_ext: zip
           - os: macos-12
