@@ -1,34 +1,26 @@
-name: Build SwarmNode
-
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-  workflow_dispatch:
-
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
   build:
-    name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-22.04, windows-2022]
-
+        os: [ubuntu-latest, windows-latest]
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-      
-    - name: Install Linux Dependencies (Ubuntu)
-      if: runner.os == 'Linux'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libxkbcommon-dev libvulkan-dev wayland-protocols xorg-dev libasound2-dev
-
-    - name: Build
-      run: cargo build --release --verbose
+      - uses: actions/checkout@v2
+      - name: Build
+        run: |
+          cargo build --release
+      - name: Create Artifacts Directory
+        run: |
+          mkdir -p artifacts
+      - name: Copy Build Outputs
+        run: |
+          if [ ${{ matrix.os }} == 'ubuntu-latest' ]; then \
+            cp target/release/* artifacts/; \
+          else \
+            xcopy target\release\* artifacts\ /Y; \
+          fi
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-binaries-${{ matrix.os }}
+          path: artifacts/
