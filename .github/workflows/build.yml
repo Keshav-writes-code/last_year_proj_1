@@ -1,3 +1,12 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
 jobs:
   build:
     runs-on: ${{ matrix.os }}
@@ -14,11 +23,7 @@ jobs:
           mkdir -p artifacts
       - name: Copy Build Outputs
         run: |
-          if [ ${{ matrix.os }} == 'ubuntu-latest' ]; then \
-            cp target/release/* artifacts/; \
-          else \
-            xcopy target\release\* artifacts\ /Y; \
-          fi
+          if [ ${{ matrix.os }} == 'ubuntu-latest' ]; then \n            cp target/release/* artifacts/; \n          else \n            xcopy target\release\* artifacts\ /Y; \n          fi
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
