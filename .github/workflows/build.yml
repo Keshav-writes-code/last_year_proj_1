@@ -1,39 +1,42 @@
 name: Build
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   build:
+    name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        include:
+          - os: ubuntu-22.04
+            artifact_name: swarmnode-linux
+            binary_path: target/release/swarmnode
+          - os: windows-2022
+            artifact_name: swarmnode-windows
+            binary_path: target/release/swarmnode.exe
+
     steps:
-      - uses: actions/checkout@v2
-      
-      - name: Build
-        run: |
-          cargo build --release
-          
-      - name: Create Artifacts Directory
-        run: |
-          mkdir -p artifacts
-          
-      - name: Copy Build Outputs (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
-        run: cp target/release/* artifacts/
-        
-      - name: Copy Build Outputs (Windows)
-        if: matrix.os == 'windows-latest'
-        run: copy target\release\* artifacts\
-        
-      - name: Upload Artifacts
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: built-binaries-${{ matrix.os }}
-          path: artifacts/
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.binary_path }}
+          if-no-files-found: error
