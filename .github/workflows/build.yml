@@ -15,15 +15,23 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v2
+      
       - name: Build
         run: |
           cargo build --release
+          
       - name: Create Artifacts Directory
         run: |
           mkdir -p artifacts
-      - name: Copy Build Outputs
-        run: |
-          if [ ${{ matrix.os }} == 'ubuntu-latest' ]; then \n            cp target/release/* artifacts/; \n          else \n            xcopy target\release\* artifacts\ /Y; \n          fi
+          
+      - name: Copy Build Outputs (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: cp target/release/* artifacts/
+        
+      - name: Copy Build Outputs (Windows)
+        if: matrix.os == 'windows-latest'
+        run: copy target\release\* artifacts\
+        
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
