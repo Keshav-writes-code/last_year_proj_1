@@ -1,0 +1,11 @@
+[package]
+name = "native_gui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+iced = { version = "0.12", features = ["tokio", "debug"] }
+tokio = { version = "1.36", features = ["sync", "macros"] }
+anyhow = "1.0"
+tracing = "0.1"
+core_network = { path = "../core_network" }

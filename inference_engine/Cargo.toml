@@ -1,0 +1,11 @@
+[package]
+name = "inference_engine"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+candle-core = "0.8.1"
+candle-nn = "0.8.1"
+tokio = { version = "1.36", features = ["sync"] }
+anyhow = "1.0"
+tracing = "0.1"

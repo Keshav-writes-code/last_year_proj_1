@@ -1,0 +1,22 @@
+[workspace]
+members = [
+    "core_network",
+    "inference_engine",
+    "native_gui"
+]
+resolver = "2"
+
+[package]
+name = "swarmnode"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+core_network = { path = "core_network" }
+inference_engine = { path = "inference_engine" }
+native_gui = { path = "native_gui" }
+tokio = { version = "1.36", features = ["full"] }
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
